@@ -1,9 +1,6 @@
 # Pcap Parser Python
 # MIT License - Copyright (c) 2019 Bernard Avenatti
 
-# Pcap Parser Python
-# MIT License - Copyright (c) 2019 Bernard Avenatti
-
 import io, socket, datetime, configparser
 import dpkt
 from dpkt.compat import compat_ord
