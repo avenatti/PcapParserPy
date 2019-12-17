@@ -13,7 +13,7 @@ print('ConnectScanTest: ' + ('Pass' if connect_result == 1660 else 'Fail'))
 # STEALTH/HALFOPEN SCAN TEST
 # pcap_file = 'halfopen_scan.pcap' # test producing 1654 refused + 6 connect --> 1660
 # halfopen.pcap Wireshark --> 1661 conversations (tcp and ip.src==192.168.1.100)
-stealth_result = halfopen_scan('halfopen_scan.pcap')
+stealth_result = halfopen_scan('stealth_scan.pcap')
 print('StealthScanTest: ' + ('Pass' if stealth_result == 1660 else 'Fail'))
 
 # UDP SCAN TEST
