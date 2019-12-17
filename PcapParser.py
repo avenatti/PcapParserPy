@@ -1,41 +1,32 @@
 # Pcap Parser Python
 # MIT License - Copyright (c) 2019 Bernard Avenatti
 
-import sys, io, socket, datetime
-import ConfigParser
+# Pcap Parser Python
+# MIT License - Copyright (c) 2019 Bernard Avenatti
+
+import io, socket, datetime, configparser
 import dpkt
 from dpkt.compat import compat_ord
 
+debug = False
+
 # Load the configuration file
 with open('config.ini') as f:
-    parser_config = f.read()
-config = ConfigParser.RawConfigParser(allow_no_value=True)
-config.readfp(io.BytesIO(parser_config))
+  parser_config = f.read()
+  config = configparser.ConfigParser(allow_no_value=True)
+  config.read_string(parser_config)
+  # Set config values
+  debug = config.getboolean('mode', 'debug')
+  debug = False if debug is None else debug
 
-# Set config values
-debug = config.getboolean('mode', 'debug'))
-debug = False if debug is None else debug
-
-packets = dict()
-udp = dict()
-unique_null_ports = 0
-unique_xmas_ports = 0
-unique_udp_ports = 0 # only count UDP packets where no payload 
-unique_halfopen_ports = 0
-unique_connect_ports = 0
-
-# format for running script will be bja0001.py -i file.pcap (ignore -i flag)
-if debug == False: 
-  # accept any input filename with pcap extension
-  pcap_file =  ''
-  try:
-    pcap_file = sys.argv[2]
-  except:
-    sys.exit('\nNo file was passed as the second argument. Include input file name as second argument. \nEx: python3 bja0001.py -i filename.pcap')
-  if len(pcap_file) < 6:
-    sys.exit('\nYour input file has an invalid name. Check input and try again.\nEx: python3 bja0001.py -i filename.pcap')
-  if not pcap_file.endswith('.pcap'):
-    sys.exit('\nYour file has an unknown extension! Please input pcap files only.\nEx: python3 bja0001.py -i filename.pcap')
+# check file
+def check_file(filename, extension):
+  file_okay = 'Yes'
+  if len(filename) < 6:
+    file_okay =  'Your input file has an invalid name. Check input and try again.'
+  elif not filename.endswith(extension):
+    file_okay =  'Your file has an unknown extension! Please input ' + extension + ' files only.'
+  return file_okay
     
 # define scan type class
 class scan_type(object):
@@ -262,40 +253,72 @@ def tcp_conversation_exist(packets):
   # print('open: ' + str(s.open))
   return s
 
-# parse file into a dictionary of tcp/udp generic packet objects with key timestamps
-with open(pcap_file, 'rb') as f:
-  pcap = dpkt.pcap.Reader(f)
-  get_packets(pcap, packets)
+# count udp ports scanned
+def udp_scan(pcap_file):
+  packets = dict()
+  unique_udp_ports = 0 # only count UDP packets where no payload 
+  with open(pcap_file, 'rb') as f:
+    pcap = dpkt.pcap.Reader(f)
+    get_packets(pcap, packets)
+    for key in packets:
+      packet = packets[key]
+      if packet.packet_type == 'UDP' and len(packet.data) == 0:
+        packets[key].scan_categories.is_udp_scan = True
+        unique_udp_ports = unique_udp_ports + 1
+  return 0 if unique_udp_ports is None else unique_udp_ports
 
-# determine if packets are part of a scan (and type) or not
-for key in packets:
-  packet = packets[key]
-  if packet.packet_type == 'UDP' and len(packet.data) == 0:
-    packets[key].scan_categories.is_udp_scan = True
-    unique_udp_ports = unique_udp_ports + 1
-  elif packet.packet_type == 'TCP':
-    # is it TCP > XMAS scan ?
-    packets[key].scan_categories.is_xmas_scan = True if packet.flags.fin and packet.flags.urg and packet.flags.psh else False
-    unique_xmas_ports = unique_xmas_ports + (1 if packets[key].scan_categories.is_xmas_scan else 0)
-    # is it TCP > null scan ?
-    packets[key].scan_categories.is_null_scan = (True if ( packet.flags.fin == False 
-                                                           and packet.flags.urg == False 
-                                                           and packet.flags.psh == False 
-                                                           and packet.flags.syn == False
-                                                           and packet.flags.rst == False
-                                                           and packet.flags.ack == False
-                                                           and packet.flags.ece == False
-                                                           and packet.flags.cwr == False ) 
-                                                      else False)
-    unique_null_ports = unique_null_ports + (1 if packets[key].scan_categories.is_null_scan else 0)
+# count null ports scanned
+def null_scan(pcap_file):
+  if check_file(pcap_file,'py') == 'yes':
+    packets = dict()
+    unique_null_ports = 0
+    with open(pcap_file, 'rb') as f:
+      pcap = dpkt.pcap.Reader(f)
+      get_packets(pcap, packets) 
+      for key in packets:
+        packet = packets[key]
+        if packet.packet_type == 'TCP':
+          # is it TCP > null scan ?
+          packets[key].scan_categories.is_null_scan = (True if ( packet.flags.fin == False and packet.flags.urg == False and packet.flags.psh == False and packet.flags.syn == False and packet.flags.rst == False and packet.flags.ack == False and packet.flags.ece == False and packet.flags.cwr == False ) else False)
+          unique_null_ports = unique_null_ports + (1 if packets[key].scan_categories.is_null_scan else 0)
+  return 0 if unique_null_ports is None else unique_null_ports
 
-# parse generic packets for connect scan  
-tcp_scan = tcp_conversation_exist(packets)
-unique_connect_ports = (tcp_scan.full_connect + tcp_scan.refused if tcp_scan.full_connect > tcp_scan.stealth_connect else 0)
-unique_halfopen_ports = (tcp_scan.stealth_connect + tcp_scan.refused if tcp_scan.full_connect < tcp_scan.stealth_connect else 0)
+# count xmas ports scanned
+def xmas_scan(pcap_file):
+  if check_file(pcap_file,'py') == 'yes':
+    packets = dict()
+    unique_xmas_ports = 0
+    with open(pcap_file, 'rb') as f:
+      pcap = dpkt.pcap.Reader(f)
+      get_packets(pcap, packets) 
+      for key in packets:
+        packet = packets[key]
+        if packet.packet_type == 'TCP':
+          # is it TCP > XMAS scan ?
+          packets[key].scan_categories.is_xmas_scan = True if packet.flags.fin and packet.flags.urg and packet.flags.psh else False
+          unique_xmas_ports = unique_xmas_ports + (1 if packets[key].scan_categories.is_xmas_scan else 0)
+  return 0 if unique_xmas_ports is None else unique_xmas_ports
 
-print('Null: ' + str(unique_null_ports))
-print('XMAS: ' + str(unique_xmas_ports))
-print('UDP: ' + str(unique_udp_ports))
-print('Half-open: ' + str(unique_halfopen_ports))
-print('Connect: ' + str(unique_connect_ports))
+# count stealth/halfopen ports scanned
+def halfopen_scan(pcap_file):
+  if check_file(pcap_file,'py') == 'yes':
+    packets = dict()
+    unique_halfopen_ports = 0
+    with open(pcap_file, 'rb') as f:
+      pcap = dpkt.pcap.Reader(f)
+      get_packets(pcap, packets)
+      tcp_scan = tcp_conversation_exist(packets)
+      unique_halfopen_ports = (tcp_scan.stealth_connect + tcp_scan.refused if tcp_scan.full_connect < tcp_scan.stealth_connect else 0)
+  return 0 if unique_halfopen_ports is None else unique_halfopen_ports
+
+# count connect ports scanned
+def connect_scan(pcap_file):
+  if check_file(pcap_file,'py') == 'yes':
+    packets = dict()
+    unique_connect_ports = 0
+    with open(pcap_file, 'rb') as f:
+      pcap = dpkt.pcap.Reader(f)
+      get_packets(pcap, packets)
+      tcp_scan = tcp_conversation_exist(packets)
+      unique_connect_ports = (tcp_scan.full_connect + tcp_scan.refused if tcp_scan.full_connect > tcp_scan.stealth_connect else 0)
+  return 0 if unique_connect_ports is None else unique_connect_ports
