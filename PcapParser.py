@@ -1,13 +1,20 @@
+# Pcap Parser Python
 # MIT License - Copyright (c) 2019 Bernard Avenatti
 
-import sys
-import datetime
-import socket
+import sys, io, socket, datetime
+import ConfigParser
 import dpkt
 from dpkt.compat import compat_ord
 
-# debugging ?
-debug = False
+# Load the configuration file
+with open('config.ini') as f:
+    parser_config = f.read()
+config = ConfigParser.RawConfigParser(allow_no_value=True)
+config.readfp(io.BytesIO(parser_config))
+
+# Set config values
+debug = config.getboolean('mode', 'debug'))
+debug = False if debug is None else debug
 
 packets = dict()
 udp = dict()
@@ -29,19 +36,7 @@ if debug == False:
     sys.exit('\nYour input file has an invalid name. Check input and try again.\nEx: python3 bja0001.py -i filename.pcap')
   if not pcap_file.endswith('.pcap'):
     sys.exit('\nYour file has an unknown extension! Please input pcap files only.\nEx: python3 bja0001.py -i filename.pcap')
-else: 
-  pcap_file = 'connect_scan.pcap' # test producing 1654 refused + 6 connect --> 1660
-  # connect_scan.pcap Wireshark --> 1661 conversations (tcp and ip.src==192.168.1.100) packet 3&4 are not connect scan there for 1660
-  # pcap_file = 'halfopen.pcap' # test producing 1654 refused + 6 connect --> 1660
-  # halfopen.pcap Wireshark --> 1661 conversations (tcp and ip.src==192.168.1.100)
-  # pcap_file = 'udp_scan.pcap' # tested producing 1440 results (1456 total UDP)
-  # udp_scan.pcap Wireshark udp and ip.src == 192.168.1.100 --> view conversations 1427
-  # pcap_file = 'xmas_scan.pcap' # tested producing 1668 results (3328 total TCP)
-  # xmas_scan.pcap Wireshark filter tcp.flags==0X029 --> 1668
-  # pcap_file = 'null_scan.pcap' # tested producing 1668 results (3328 total TCP)
-  # null_scan.pcap Wireshark filter tcp.flags==0x000 --> 1668
-  # pcap_file = 'combo_scan.pcap' # merged null + xmas + udp + stealth
-
+    
 # define scan type class
 class scan_type(object):
   def __init__(self, null=False, xmas=False, udp=False, half=False, con=False):
