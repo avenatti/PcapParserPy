@@ -6,6 +6,7 @@ import dpkt
 from dpkt.compat import compat_ord
 
 debug = False
+duplicates = False
 
 # Load the configuration file
 with open('config.ini') as f:
@@ -15,7 +16,9 @@ with open('config.ini') as f:
   # Set config values
   debug = config.getboolean('mode', 'debug')
   debug = False if debug is None else debug
-
+  duplicates = config.getboolean('user_preferences', 'count_duplicates')
+  duplicates = False if duplicates is None else duplicates 
+  
 # check file
 def check_file(filename, extension):
   file_okay = 'Yes'
